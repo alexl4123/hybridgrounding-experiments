@@ -1,0 +1,1 @@
+vertex(1).vertex(2).edge(1,1).edge(2,1).edge(2,2).min_reached_vertices(1).
