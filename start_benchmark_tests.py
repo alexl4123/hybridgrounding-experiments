@@ -17,6 +17,8 @@ import base64
 import pickle
 
 from start_benchmark_utils import StartBenchmarkUtils
+from joblib import Parallel, delayed
+
 
 def limit_virtual_memory():
     max_virtual_memory = 1024 * 1024 * 1024 * 64 # 64GB
@@ -33,7 +35,7 @@ class Benchmark:
         self.clingo_hashes = {}
         self.hybrid_grounding_hashes = {} 
 
-    def parse(self, config, timeout = 1800, clingo_mockup = False, idlv_mockup = False, hybrid_grounding_idlv_mockup = False, hybrid_grounding_gringo_mockup = False, ground_and_solve = True, run_all_examples = False, optimization_benchmarks = False):
+    def parse(self, config, timeout = 1800, clingo_mockup = False, idlv_mockup = False, hybrid_grounding_idlv_mockup = False, hybrid_grounding_gringo_mockup = False, ground_and_solve = True, run_all_examples = False, optimization_benchmarks = False, parallel_threads = 1):
         parser = argparse.ArgumentParser(prog='Primitive Benchmark', description='Benchmarks hybrid_grounding vs. Clingo (total grounding + solving time).')
 
         parser.add_argument('input_folder')
@@ -127,115 +129,131 @@ class Benchmark:
 
         # ------------------------ START BENCHMARK HERE -------------------------
 
+        sorted_probability_keys = list(instance_files_dir.keys())
+        sorted_probability_keys.sort()
+        Parallel(n_jobs=parallel_threads)(delayed(self.benchmark_instance)(config, timeout, clingo_mockup, idlv_mockup, hybrid_grounding_idlv_mockup, hybrid_grounding_gringo_mockup, ground_and_solve, run_all_examples, optimization_benchmarks, input_path, hg_encoding_file_contents, traditional_encoding_file_contents, total_time_output_filename, grounding_time_output_filename, grounding_size_output_filename, key, repetition_file_length, instance_files_dir) for key in sorted_probability_keys)
+
+        #for instance_file in instance_files:
+        #
+        #    self.benchmark_instance(
+
+
+    def benchmark_instance(self, config, timeout, clingo_mockup, idlv_mockup, hybrid_grounding_idlv_mockup, hybrid_grounding_gringo_mockup, ground_and_solve, run_all_examples, optimization_benchmarks, input_path, hg_encoding_file_contents, traditional_encoding_file_contents, total_time_output_filename, grounding_time_output_filename, grounding_size_output_filename, key, repetition_file_length, instance_file_dir):
+
         failed_instances_dict = {}
 
-        for instance_file in instance_files:
+        sorted_instance_size_keys = list(instance_file_dir[key].keys())
+        sorted_instance_size_keys.sort()
+        for instance_size_key in sorted_instance_size_keys:
 
-            self.benchmark_instance(config, timeout, clingo_mockup, idlv_mockup, hybrid_grounding_idlv_mockup, hybrid_grounding_gringo_mockup, ground_and_solve, run_all_examples, optimization_benchmarks, input_path, hg_encoding_file_contents, traditional_encoding_file_contents, total_time_output_filename, grounding_time_output_filename, grounding_size_output_filename, instance_file, failed_instances_dict, repetition_file_length)
+            sorted_iteration_numbers = instance_file_dir[key][instance_size_key]
+            sorted_iteration_numbers.sort()
+            for iteration_number in sorted_iteration_numbers:
 
-    def benchmark_instance(self, config, timeout, clingo_mockup, idlv_mockup, hybrid_grounding_idlv_mockup, hybrid_grounding_gringo_mockup, ground_and_solve, run_all_examples, optimization_benchmarks, input_path, hg_encoding_file_contents, traditional_encoding_file_contents, total_time_output_filename, grounding_time_output_filename, grounding_size_output_filename, instance_file, failed_instances_dict, repetition_file_length):
-        print("")
-        print(f">>>> Now solving: {instance_file}")
-        print("")
-        instance_path = os.path.join(input_path, instance_file[0], instance_file[1], instance_file[2])
-        instance_file_contents = open(instance_path, 'r').read()
+                instance_file = (key, instance_size_key, iteration_number)
 
-        if "seed(" in instance_file_contents:
-            seed_content = instance_file_contents.split("seed(")[1]
+                print("")
+                print(f">>>> Now solving: {instance_file}")
+                print("")
+                instance_path = os.path.join(input_path, instance_file[0], instance_file[1], instance_file[2])
+                instance_file_contents = open(instance_path, 'r').read()
 
-            seed = ""
-            for char in seed_content:
-                if char is not ")":
-                    seed = seed + char
+                if "seed(" in instance_file_contents:
+                    seed_content = instance_file_contents.split("seed(")[1]
+
+                    seed = ""
+                    for char in seed_content:
+                        if char is not ")":
+                            seed = seed + char
+                        else:
+                            break
+
                 else:
-                    break
-
-        else:
-            print(f"Seed not found in file {instance_file}")
-            print("EXITING due to necessary condition not fulfilled.")
-            quit()
+                    print(f"Seed not found in file {instance_file}")
+                    print("EXITING due to necessary condition not fulfilled.")
+                    quit()
 
 
-        instance_file_contents += traditional_encoding_file_contents
+                instance_file_contents += traditional_encoding_file_contents
 
-        benchmarks = {}
-        benchmarks["GRINGO"] = {"mockup":clingo_mockup,
-                    "mockup_probability":{},
-                    "helper":"start_benchmark_gringo_helper.py",
-                    "program_input": (instance_file_contents + hg_encoding_file_contents).encode()} 
-        benchmarks["IDLV"] = {"mockup":idlv_mockup,
-                    "mockup_probability":{},
-                    "helper":"start_benchmark_idlv_helper.py",
-                    "program_input": (instance_file_contents + hg_encoding_file_contents).encode()}
-        benchmarks["hybrid_grounding-IDLV"] = {"mockup":hybrid_grounding_idlv_mockup,
-                    "mockup_probability":{},
-                    "helper":"start_benchmark_hybrid_grounding_helper.py",
-                    "program_input": (instance_file_contents + "\n#program rules.\n" + hg_encoding_file_contents).encode()}
-        benchmarks["hybrid_grounding-GRINGO"] = {"mockup":hybrid_grounding_gringo_mockup,
-                    "mockup_probability":{},
-                    "helper":"start_benchmark_hybrid_grounding_helper.py",
-                    "program_input": (instance_file_contents + "\n#program rules.\n" + hg_encoding_file_contents).encode()}
+                benchmarks = {}
+                benchmarks["GRINGO"] = {"mockup":clingo_mockup,
+                            "mockup_probability":{},
+                            "helper":"start_benchmark_gringo_helper.py",
+                            "program_input": (instance_file_contents + hg_encoding_file_contents).encode()} 
+                benchmarks["IDLV"] = {"mockup":idlv_mockup,
+                            "mockup_probability":{},
+                            "helper":"start_benchmark_idlv_helper.py",
+                            "program_input": (instance_file_contents + hg_encoding_file_contents).encode()}
+                benchmarks["hybrid_grounding-IDLV"] = {"mockup":hybrid_grounding_idlv_mockup,
+                            "mockup_probability":{},
+                            "helper":"start_benchmark_hybrid_grounding_helper.py",
+                            "program_input": (instance_file_contents + "\n#program rules.\n" + hg_encoding_file_contents).encode()}
+                benchmarks["hybrid_grounding-GRINGO"] = {"mockup":hybrid_grounding_gringo_mockup,
+                            "mockup_probability":{},
+                            "helper":"start_benchmark_hybrid_grounding_helper.py",
+                            "program_input": (instance_file_contents + "\n#program rules.\n" + hg_encoding_file_contents).encode()}
 
-        print(instance_file[2])
-        total_time_string = f"\n{instance_file[0]},{instance_file[1]},{instance_file[2].split('.')[0]},{seed},"
-        grounding_time_string = total_time_string
-        grounding_size_string = total_time_string
+                print(instance_file[2])
+                total_time_string = f"\n{instance_file[0]},{instance_file[1]},{instance_file[2].split('.')[0]},{seed},"
+                grounding_time_string = total_time_string
+                grounding_size_string = total_time_string
 
 
-        counter = 0
-        for strategy in benchmarks.keys():
-            strategy_dict = benchmarks[strategy]
+                counter = 0
+                for strategy in benchmarks.keys():
+                    strategy_dict = benchmarks[strategy]
 
-            if not strategy_dict["mockup"] and instance_file[0] not in strategy_dict["mockup_probability"]:
-                timeout_occurred, total_duration, grounding_duration, grounding_file_size  = Benchmark.benchmark_caller(strategy_dict["program_input"], config, strategy_dict["helper"], strategy, timeout = timeout, ground_and_solve = ground_and_solve, optimization_benchmarks = optimization_benchmarks)
-            else:
-                timeout_occurred = True
-                total_duration = timeout
-                grounding_duration = timeout
-                grounding_file_size = 0
+                    if not strategy_dict["mockup"] and instance_file[0] not in strategy_dict["mockup_probability"]:
+                        timeout_occurred, total_duration, grounding_duration, grounding_file_size  = Benchmark.benchmark_caller(strategy_dict["program_input"], config, strategy_dict["helper"], strategy, timeout = timeout, ground_and_solve = ground_and_solve, optimization_benchmarks = optimization_benchmarks)
+                    else:
+                        timeout_occurred = True
+                        total_duration = timeout
+                        grounding_duration = timeout
+                        grounding_file_size = 0
 
-                # Print current console info:
-            if timeout_occurred:
-                print(f"[INFO] - {strategy} timed out ({total_duration})!")
+                        # Print current console info:
+                    if timeout_occurred:
+                        print(f"[INFO] - {strategy} timed out ({total_duration})!")
 
-                if strategy not in failed_instances_dict:
-                    failed_instances_dict[strategy] = {}
+                        if strategy not in failed_instances_dict:
+                            failed_instances_dict[strategy] = {}
 
-                if instance_file[0] not in failed_instances_dict[strategy]:
-                    failed_instances_dict[strategy][instance_file[0]] = {}
+                        if instance_file[0] not in failed_instances_dict[strategy]:
+                            failed_instances_dict[strategy][instance_file[0]] = {}
 
-                if instance_file[1] not in failed_instances_dict[strategy][instance_file[0]]:
-                    failed_instances_dict[strategy][instance_file[0]][instance_file[1]] = []
+                        if instance_file[1] not in failed_instances_dict[strategy][instance_file[0]]:
+                            failed_instances_dict[strategy][instance_file[0]][instance_file[1]] = []
 
-                failed_instances_dict[strategy][instance_file[0]][instance_file[1]].append(instance_file)
+                        failed_instances_dict[strategy][instance_file[0]][instance_file[1]].append(instance_file)
 
-                if len(failed_instances_dict[strategy][instance_file[0]][instance_file[1]]) == repetition_file_length:
-                    if not run_all_examples:
-                        strategy_dict["mockup_probability"] = instance_file[0]
+                        if len(failed_instances_dict[strategy][instance_file[0]][instance_file[1]]) == repetition_file_length:
+                            if not run_all_examples:
+                                strategy_dict["mockup_probability"] = instance_file[0]
 
-            else:
-                print(f"[INFO] - {strategy} needed {total_duration} seconds!")
+                    else:
+                        print(f"[INFO] - {strategy} needed {total_duration} seconds!")
 
-            total_time_string += f"{total_duration},{timeout_occurred}"
-            grounding_time_string += f"{grounding_duration},{timeout_occurred}"
-            grounding_size_string += f"{grounding_file_size},{timeout_occurred}"
+                    total_time_string += f"{total_duration},{timeout_occurred}"
+                    grounding_time_string += f"{grounding_duration},{timeout_occurred}"
+                    grounding_size_string += f"{grounding_file_size},{timeout_occurred}"
 
-            if counter < 3:
-                total_time_string += ","
-                grounding_time_string += ","
-                grounding_size_string += ","
+                    if counter < 3:
+                        total_time_string += ","
+                        grounding_time_string += ","
+                        grounding_size_string += ","
 
-            counter += 1
+                    counter += 1
 
-            # Add info to .csv files
-        with open(total_time_output_filename, "a") as output_file:
-            output_file.write(total_time_string)
+                    # Add info to .csv files
+                with open(total_time_output_filename, "a") as output_file:
+                    output_file.write(total_time_string)
 
-        with open(grounding_time_output_filename, "a") as output_file:
-            output_file.write(grounding_time_string)
+                with open(grounding_time_output_filename, "a") as output_file:
+                    output_file.write(grounding_time_string)
 
-        with open(grounding_size_output_filename, "a") as output_file:
-            output_file.write(grounding_size_string)
+                with open(grounding_size_output_filename, "a") as output_file:
+                    output_file.write(grounding_size_string)
 
 
     @classmethod
@@ -297,10 +315,11 @@ if __name__ == "__main__":
     hybrid_grounding_gringo_mockup = False
 
     ground_and_solve = True
-    run_all_examples = True
+    run_all_examples = False
+    parallel_threads = 4
 
 
-    checker.parse(config, timeout = timeout, clingo_mockup = gringo_mockup, idlv_mockup = idlv_mockup, hybrid_grounding_idlv_mockup = hybrid_grounding_idlv_mockup, hybrid_grounding_gringo_mockup = hybrid_grounding_gringo_mockup, ground_and_solve = ground_and_solve, run_all_examples = run_all_examples, optimization_benchmarks = True)
+    checker.parse(config, timeout = timeout, clingo_mockup = gringo_mockup, idlv_mockup = idlv_mockup, hybrid_grounding_idlv_mockup = hybrid_grounding_idlv_mockup, hybrid_grounding_gringo_mockup = hybrid_grounding_gringo_mockup, ground_and_solve = ground_and_solve, run_all_examples = run_all_examples, optimization_benchmarks = True, parallel_threads=parallel_threads)
 
 
 
