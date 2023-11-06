@@ -163,7 +163,7 @@ class Benchmark:
 
                     seed = ""
                     for char in seed_content:
-                        if char is not ")":
+                        if char != ")":
                             seed = seed + char
                         else:
                             break
@@ -271,6 +271,8 @@ class Benchmark:
             p = subprocess.Popen(arguments, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=limit_virtual_memory)       
             (ret_vals_encoded, error_vals_encoded) = p.communicate(input = program_input, timeout = int(timeout*1.1))
             ret_vals = StartBenchmarkUtils.decode_argument(ret_vals_encoded.decode())
+            #error_vals = StartBenchmarkUtils.decode_argument(error_vals_encoded.decode())
+            #print(error_vals)
 
             if p.returncode != 0:
                 print(f">>>>> Other return code than 0 in helper: {p.returncode}")
@@ -307,7 +309,7 @@ if __name__ == "__main__":
 
     timeout = 1800
 
-    optimization_benchmarks = True
+    optimization_benchmarks = False
 
     gringo_mockup = False
     idlv_mockup = False
@@ -316,7 +318,7 @@ if __name__ == "__main__":
 
     ground_and_solve = True
     run_all_examples = False
-    parallel_threads = 4
+    parallel_threads = 1
 
 
     checker.parse(config, timeout = timeout, clingo_mockup = gringo_mockup, idlv_mockup = idlv_mockup, hybrid_grounding_idlv_mockup = hybrid_grounding_idlv_mockup, hybrid_grounding_gringo_mockup = hybrid_grounding_gringo_mockup, ground_and_solve = ground_and_solve, run_all_examples = run_all_examples, optimization_benchmarks = True, parallel_threads=parallel_threads)

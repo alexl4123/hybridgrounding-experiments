@@ -41,7 +41,7 @@ else:
     config["gringo_command"] = "./gringo"
     config["idlv_command"] = "./idlv.bin"
     config["python_command"] = "./python3"
-    config["rewriting_strategy"] = "--aggregate-strategy=replace"
+    config["rewriting_strategy"] = "--aggregate-strategy=RA"
 
     timeout = 1800
     ground_and_solve = True
@@ -64,7 +64,7 @@ hybrid_grounding_clingo_duration = timeout
 
 grounding_file_size_kb = 0
 
-hybrid_grounding_args = [config["python_command"], "start_hybrid_grounding.py", config["rewriting_strategy"],  f"{temp_file.name}"]
+hybrid_grounding_args = [config["python_command"], "start_hybrid_grounding.py", config["rewriting_strategy"],  f"{temp_file.name}", f"--no-show"]
 
 if optimization_benchmarks == False:
     if grounder == "hybrid_grounding-IDLV":
